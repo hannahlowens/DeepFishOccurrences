@@ -1,0 +1,66 @@
+---
+title: "Fish Depth Preliminary Results"
+author: "Hannah L. Owens"
+date: "12/27/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/Dropbox/DeepFishOccurrences/")
+```
+
+## Getting set up
+
+Here's what I did to get things to be plottable.
+
+```{r depth by family}
+library(stringr)
+
+fishData <- read.csv("data/AA_MASTER_Fishes_Global_200-8000m.csv")
+
+# There are 187 columns in this nonsense. I'm getting rid of some.
+fishData <- fishData[, c("dwc.family", "dwc.genus", "dwc.scientificName",
+                         "dwc.verbatimDepth", "dwc.maximumDepthInMeters", "dwc.minimumDepthInMeters")]
+
+# Cleaning scientific names
+fishData$dwc.scientificName <- word(fishData$dwc.scientificName, 1,2, sep=" ")
+
+# Fix blanks
+fishData[fishData==""] <- NA
+
+# Convert "fm"
+convertFMtoM <- function(input){
+  if(str_detect(input, pattern = " fm")){
+    output <- str_split(input, pattern = " ")[[1]][1]
+    output <- as.numeric(output) * 1.8288
+  }
+  return(output)
+}
+
+# Remove "m"
+
+# Interpret ranges as means
+```
+
+## Depth by family
+
+```{r depth by family}
+ggplot(plot.data, aes(x=group, y=Oxygen)) + 
+  geom_violin(fill=cols[2], ) +
+  theme_classic(base_size = 40) +
+  theme(axis.title = element_blank(), 
+        text = element_text(family = "Optima"), 
+        axis.text = element_text(size = rel(1.1))) +
+  ggtitle("Dissolved Oxygen (µmol/kg)") + 
+  geom_boxplot(width=0.1)
+```
+
+## Depth by genus
+
+
+```{r pressure}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
