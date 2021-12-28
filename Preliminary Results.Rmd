@@ -10,11 +10,11 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "~/Dropbox/DeepFishOccurrences/")
 ```
 
-## Getting set up
+## Fitting data for use
 
-Here's what I did to get things to be plottable.
+First, I read in the data and clean the maximum and minimum depth columns, getting rid of units and converting everything (that's noted) into meters. It is assumed that measurements without units are in meters.
 
-```{r depth by family}
+```{r read in data and process max and min depth values}
 library(stringr)
 
 fishData <- read.csv("data/AA_MASTER_Fishes_Global_200-8000m.csv")
@@ -29,18 +29,195 @@ fishData$dwc.scientificName <- word(fishData$dwc.scientificName, 1,2, sep=" ")
 # Fix blanks
 fishData[fishData==""] <- NA
 
-# Convert "fm"
+# Fix max and min columns
 convertFMtoM <- function(input){
-  if(str_detect(input, pattern = " fm")){
-    output <- str_split(input, pattern = " ")[[1]][1]
-    output <- as.numeric(output) * 1.8288
-  }
+  output <- str_split(input, pattern = "fms")[[1]][1]
+  output <- as.numeric(output) * 1.8288
   return(output)
 }
 
-# Remove "m"
+convertFTtoM <- function(input){
+  output <- str_split(input, pattern = "ft")[[1]][1]
+  output <- as.numeric(output) * 0.3048
+  return(output)
+}
 
-# Interpret ranges as means
+for (i in seq(1, nrow(fishData))){
+  max <- fishData$dwc.maximumDepthInMeters[i]
+  min <- fishData$dwc.minimumDepthInMeters[i]
+  # Get rid of units
+  if(is.na(max)){
+  } else {
+    if(str_detect(max, "-")){
+    fishData$dwc.verbatimDepth[i] <- max
+    max <- NA
+    } else {
+      # Get rid of random trash
+      if(str_detect(max, ">")){
+        max <- gsub(pattern = ">\\s*", replace = "", max)
+      }
+      if(str_detect(max, "ca")){
+        max <- gsub(pattern = "ca\\s*", replace = "", max)
+      } 
+      if(str_detect(max, "c.")){
+        max <- gsub(pattern = "c.\\s*", replace = "", max)
+      }
+      if(str_detect(max, "approx")){
+        max <- gsub(pattern = "a\\w*\\s*", replace = "", max)
+      }
+      if(str_detect(max, "~")){
+        max <- gsub(pattern = "~\\s*", replace = "", max)
+      }
+      if(str_detect(max, ",")){
+        max <- gsub(pattern = ",", replace = "", max)
+      }
+      # Fix units
+      if(any(str_detect(max, pattern = c("feet", "ft", "'")))){
+        max <- gsub(pattern = "\\s*f\\w*", replace = "ft", max)
+        max <- gsub(pattern = "\\s*'*", replace = "ft", max)
+        max <- convertFTtoM(max)
+      } else if(any(str_detect(string = max, pattern = c("fm", "fms", "fathoms")))){
+        max <- gsub(pattern = "\\s*f\\w*", replace = "fms", max)
+        max <- convertFMtoM(max)
+      } else if(any(str_detect(max, pattern = c("m", "meters", "M")))){
+        max <- gsub(pattern = "\\s*m\\w*", replace = "m", max)
+        max <- gsub(pattern = "\\s*M\\w*", replace = "m", max)
+        max <- str_split(max, "m", simplify = T)[1,1]
+        tryCatch({max <- as.numeric(max)}, warning = function(w) {cat("Index:", i, "max:", max, "\n")})
+      } else {
+        # For everyone else
+        tryCatch({max <- as.numeric(max)}, warning = function(w) {cat("Index:", i, "max:", max, "\n")})
+      }
+    }
+  }
+  
+  if(is.na(min)){
+  } else {
+    if(str_detect(min, "-")){
+      fishData$dwc.verbatimDepth[i] <- min
+      min <- NA
+    } else {
+    # Get rid of random trash
+      if(str_detect(min, ">")){
+        min <- gsub(pattern = ">\\s*", replace = "", min)
+      }
+      if(str_detect(min, "ca")){
+        min <- gsub(pattern = "ca\\s*", replace = "", min)
+      } 
+      if(str_detect(min, "c.")){
+        min <- gsub(pattern = "c.\\s*", replace = "", min)
+      }
+      if(str_detect(min, "approx")){
+        min <- gsub(pattern = "a\\w*\\s*", replace = "", min)
+      }
+      if(str_detect(min, "~")){
+        min <- gsub(pattern = "~\\s*", replace = "", min)
+      }
+      if(str_detect(min, ",")){
+        min <- gsub(pattern = ",", replace = "", min)
+      }
+      # Fix units
+      if(any(str_detect(min, pattern = c("feet", "ft", "'")))){
+        min <- gsub(pattern = "\\s*f\\w*", replace = "ft", min)
+        min <- gsub(pattern = "\\s*'*", replace = "ft", min)
+        min <- convertFTtoM(min)
+      } else if(any(str_detect(string = min, pattern = c("fm", "fms", "fathoms")))){
+        min <- gsub(pattern = "\\s*f\\w*", replace = "fms", min)
+        min <- convertFMtoM(min)
+      } else if(any(str_detect(min, pattern = c("m", "meters", "M")))){
+        min <- gsub(pattern = "\\s*m\\w*", replace = "m", min)
+        min <- gsub(pattern = "\\s*M\\w*", replace = "m", min)
+        min <- str_split(min, "m", simplify = T)[1,1]
+        tryCatch({min <- as.numeric(min)}, warning = function(w) {cat("Index:", i, "min:", min, "\n")})
+      } else {
+      # For everyone else
+        tryCatch({min <- as.numeric(min)}, warning = function(w) {cat("Index:", i, "min:", min, "\n")})
+      }
+    }
+  }
+  
+  # Check for max/min inversion and assign to rightful place in table
+  if(all(!is.na(c(max,min)))){
+    fishData$dwc.maximumDepthInMeters[i] <- max(c(max,min))
+    fishData$dwc.minimumDepthInMeters[i] <- min(c(max,min))
+  } else{
+    fishData$dwc.maximumDepthInMeters[i] <- max
+    fishData$dwc.minimumDepthInMeters[i] <- min
+  }
+}
+```
+
+Next, for species without maximum and/or minimum depths, we try to extract additional information from the verbatim depth data. Assumptions again include a lack of units implying the units are in meters.
+
+``` {r process verbatim depths}
+# Mining verbatim depth for precious missing information to add to max and min columns
+for (i in seq(1, nrow(fishData))){
+  entry <- fishData$dwc.verbatimDepth[i]
+  entry <- gsub(pattern = "\\.$", replacement = "", entry)
+  max <- fishData$dwc.maximumDepthInMeters[i]
+  min <- fishData$dwc.minimumDepthInMeters[i]
+  if(all(any(is.na(c(max, min))), !is.na(entry))){
+    if(str_detect(entry, pattern = "\\d+")){
+      if(str_detect(entry, pattern = "minute", negate = T)){
+        # Pull out units
+        if(str_detect(entry, pattern = "\\d+\\s*[fmM]+")){
+          units <- str_extract(entry, "[fmM]\\w*+$")
+          if(any(str_detect(units, pattern = c("fa", "fathoms", "fm")))){
+            units <- "fm"
+          } else if(any(str_detect(units, pattern = c("m", "M")))){
+            units <- "m"
+          } 
+        } else {
+          units <- "m"
+        }
+        # Pull out max and min
+        if(str_detect(entry, pattern = "-")){
+          entry <- gsub(entry, pattern = "\\s*\\D+$", replacement = "")
+          spl <- str_split(entry, pattern = "-", simplify = T)[1:2]
+          max <- as.numeric(max(c(max, spl)))
+          min <- as.numeric(min(c(min, spl)))
+        } else if (str_detect(entry, pattern = "\\d\\s\\d")){
+          entry <- gsub(entry, pattern = "\\s*\\D+$", replacement = "")
+          entry <- gsub(entry, pattern = ",", replacement = "")
+          spl <- str_split(entry, pattern = "\\s", simplify = T)[1:2]
+          max <- as.numeric(max(c(max, spl)))
+          min <- as.numeric(min(c(min, spl)))
+        } else{
+          entry <- gsub(entry, pattern = ",", replacement = "")
+          entry <- str_match(entry, "(\\d+\\.*\\d*)\\s*\\w*$")[2]
+          max <- as.numeric(max(c(max, entry), na.rm = T))
+          min <- as.numeric(min(c(min, entry), na.rm = T))
+        }
+        # Convert max and min
+        if(!is.na(units)){
+          if(units == "ft"){
+            if(!is.na(min)){
+              min <- convertFTtoM(min)
+            }
+            if(!is.na(max)){
+              max <- convertFTtoM(max)
+            }
+          } else if(units == "fm"){
+            if(!is.na(min)){
+              min <- convertFMtoM(min)
+            }
+            if(!is.na(max)){
+              max <- convertFMtoM(max)
+            }
+          }
+        }
+      }
+    }
+  }
+  fishData$dwc.maximumDepthInMeters[i] <- max
+  fishData$dwc.minimumDepthInMeters[i] <- min
+  rm(min, max)
+}
+```
+Finally, I calculate a column with a single depth measurement, the median between minimum and maximum depth. In cases where only the minimum or maximum are given, this number is used. I then save the .csv file, because dang, that's a lot of records to process.
+
+```{r calculate median depth column}
+
 ```
 
 ## Depth by family
